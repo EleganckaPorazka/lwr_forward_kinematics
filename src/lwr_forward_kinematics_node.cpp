@@ -17,8 +17,7 @@ class LWRForwardKinematicsNode : public rclcpp::Node
 {
 public:
     LWRForwardKinematicsNode();
-    void SetTool();
-    void SetTool2(const rclcpp::Parameter & p);
+    void SetTool(const rclcpp::Parameter & p);
     
 private:
     void TopicCallback(const sensor_msgs::msg::JointState & msg);
@@ -56,34 +55,12 @@ LWRForwardKinematicsNode::LWRForwardKinematicsNode()
           this->get_logger(), "Received an update to parameter \"%s\".", 
           p.get_name().c_str()
           );
-          //SetTool();
-          SetTool2(p);
+          SetTool(p);
       };
     cb_handle_ = param_subscriber_->add_parameter_callback("tool", cb);
 }
 
-void LWRForwardKinematicsNode::SetTool()
-{
-    // get the tool pose in the last link's frame
-    auto tool_parameter = this->get_parameter("tool");
-    if (tool_parameter.as_double_array().size() != 7)
-    {
-        RCLCPP_WARN(this->get_logger(),
-            "The parameter \"%s\" requires 7 elements to describe its pose in the last link's frame. The tool change is not accepted.",
-            tool_parameter.get_name().c_str()
-            );
-    }
-    else
-    {
-        // if the tool pose is legit, then transform it into the Eigen vector
-        Eigen::VectorXd tool_vector = Eigen::Map<const Eigen::VectorXd, Eigen::Unaligned>(tool_parameter.as_double_array().data(), 7);
-        // set the tool pose in the forward kinematics solver
-        forward_kinematics_.SetTool(tool_vector);
-        RCLCPP_INFO(this->get_logger(), "The tool change has been accepted.");
-    }
-}
-
-void LWRForwardKinematicsNode::SetTool2(const rclcpp::Parameter & p)
+void LWRForwardKinematicsNode::SetTool(const rclcpp::Parameter & p)
 {
     // get the tool pose in the last link's frame
     if (p.as_double_array().size() != 7)
