@@ -113,6 +113,6 @@ Eigen::MatrixXd LWRForwardKinematics::ComputeJacobian( const Eigen::VectorXd &q 
     return J;
 }
 
-} // namsespace lwr_fwd_kin
+} // namespace lwr_fwd_kin
 
 #endif // LWR_FWD_KIN_H
