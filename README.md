@@ -19,7 +19,7 @@ It is recommended to use Ubuntu 22.04 with [**ROS 2 Humble**](https://docs.ros.o
 ```
 mkdir -p ~/ros2_ws/src/lwr_forward_kinematics
 cd ~/ros2_ws/src/lwr_forward_kinematics
-git clone https://github.com/EleganckaPorazka/test_fwd_kin.git .
+git clone https://github.com/EleganckaPorazka/lwr_forward_kinematics.git .
 source /opt/ros/humble/setup.bash
 colcon build
 . install/setup.bash
