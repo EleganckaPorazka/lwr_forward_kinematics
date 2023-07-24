@@ -37,3 +37,7 @@ To change the pose of the tool in the last link's frame, use (in other terminal)
 ros2 param set /lwr_forward_kinematics tool '[x,y,z,qx,qy,qz,qw]'
 ```
 where '[x, y, z]' is the position of the tool (in meters), and '[qx, qy, qz, qw]' is its orientation (in quaternions).
+
+## Notes
+
+This code is also uploaded to [**my other repository**](https://gitlab.com/lwolinski/lwr_forward_kinematics.git).
