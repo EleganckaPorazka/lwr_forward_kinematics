@@ -11,8 +11,8 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 
-using std::placeholders::_1;
-
+namespace lwr_fwd_kin
+{
 class LWRForwardKinematicsNode : public rclcpp::Node
 {
 public:
@@ -27,12 +27,14 @@ private:
     std::shared_ptr<rclcpp::ParameterEventHandler> param_subscriber_;
     std::shared_ptr<rclcpp::ParameterCallbackHandle> cb_handle_;
     
-    lwr_fwd_kin::LWRForwardKinematics forward_kinematics_;
+    LWRForwardKinematics forward_kinematics_;
 };
 
 LWRForwardKinematicsNode::LWRForwardKinematicsNode()
 : Node("lwr_forward_kinematics")
 {
+    using std::placeholders::_1;
+    
     RCLCPP_INFO(this->get_logger(), "Starting the node.");
     
     // tool pose in the last link's frame (initially set to coincide with the last link's frame)
@@ -112,10 +114,12 @@ void LWRForwardKinematicsNode::TopicCallback(const sensor_msgs::msg::JointState 
     }
 }
 
+} // namespace lwr_fwd_kin
+
 int main(int argc, char * argv[])
 {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<LWRForwardKinematicsNode>());
+    rclcpp::spin(std::make_shared<lwr_fwd_kin::LWRForwardKinematicsNode>());
     rclcpp::shutdown();
     return 0;
 }

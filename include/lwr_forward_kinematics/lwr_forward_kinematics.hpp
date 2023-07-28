@@ -43,7 +43,7 @@ void LWRForwardKinematics::SetTool( const Eigen::VectorXd &tool_pose )
 {
     Eigen::Vector3d r_tool = tool_pose.head(3);
     Eigen::Vector4d Q_tool = tool_pose.tail(4);
-    A_tool_.block<3, 3>(0, 0) = rrhelper::quaternionsToRotationMatrix( Q_tool );
+    A_tool_.block<3, 3>(0, 0) = rrlib::QuaternionsToRotationMatrix( Q_tool );
     A_tool_.block<3, 1>(0, 3) = r_tool;
     A_tool_.row(3) << 0.0, 0.0, 0.0, 1.0;
 }
@@ -72,7 +72,7 @@ Eigen::VectorXd LWRForwardKinematics::ComputeToolPose( const Eigen::VectorXd &q 
     
     Eigen::Vector3d position = A_j.block<3, 1>(0, 3);
     Eigen::Matrix3d R = A_j.block<3, 3>(0, 0);
-    Eigen::Vector4d orientation = rrhelper::rotationMatrixToQuaternions( R );
+    Eigen::Vector4d orientation = rrlib::RotationMatrixToQuaternions( R );
     
     Eigen::VectorXd pose(7);
     pose.head(3) = position;
