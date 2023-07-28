@@ -6,6 +6,7 @@
 #include <string>
 #include <eigen3/Eigen/Dense>
 #include "lwr_forward_kinematics/lwr_forward_kinematics.hpp"
+#include "rrlib_interfaces/msg/jacobian_stamped.hpp"
 
 #include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
@@ -23,7 +24,7 @@ private:
     void TopicCallback(const sensor_msgs::msg::JointState & msg);
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr subscription_;
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr publisher_pose_;
-    //rclcpp::Publisher<....JacobianStamped>::SharedPtr publisher_jacobian_;
+    rclcpp::Publisher<rrlib_interfaces::msg::JacobianStamped>::SharedPtr publisher_jacobian_;
     std::shared_ptr<rclcpp::ParameterEventHandler> param_subscriber_;
     std::shared_ptr<rclcpp::ParameterCallbackHandle> cb_handle_;
     
@@ -46,8 +47,7 @@ LWRForwardKinematicsNode::LWRForwardKinematicsNode()
     // create a publisher for the tool pose
     publisher_pose_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("fwd_kin_pose", 10);
     // create a publisher for the Jacobian
-    // TODO:
-    // publisher_jacobian_ = this->create_publisher<....JacobianStamped>("fwd_kin_jacobian", 10);
+    publisher_jacobian_ = this->create_publisher<rrlib_interfaces::msg::JacobianStamped>("fwd_kin_jacobian", 10);
     // create a parameter subscriber 
     param_subscriber_ = std::make_shared<rclcpp::ParameterEventHandler>(this);
     
@@ -96,21 +96,33 @@ void LWRForwardKinematicsNode::TopicCallback(const sensor_msgs::msg::JointState 
     }
     else
     {
+        // get the joint position vector "q" from the JointState type msg
         Eigen::VectorXd q = Eigen::Map<const Eigen::VectorXd, Eigen::Unaligned>(msg.position.data(), forward_kinematics_.GetDOF());
+        
+        // compute the end effector pose and the Jacobian matrix of the manipulator
         Eigen::VectorXd pose = forward_kinematics_.ComputeToolPose(q);
+        Eigen::MatrixXd jacobian = forward_kinematics_.ComputeJacobian(q);
         
         // publish the computed tool pose
-        geometry_msgs::msg::PoseStamped response;
-        response.header.stamp = this->now();
-        response.header.frame_id = "kuka_lwr_base_link";
-        response.pose.position.x = pose(0);
-        response.pose.position.y = pose(1);
-        response.pose.position.z = pose(2);
-        response.pose.orientation.x = pose(3);
-        response.pose.orientation.y = pose(4);
-        response.pose.orientation.z = pose(5);
-        response.pose.orientation.w = pose(6);
-        publisher_pose_->publish(response);
+        geometry_msgs::msg::PoseStamped pose_msg;
+        pose_msg.header.stamp = this->now();
+        pose_msg.header.frame_id = "kuka_lwr_base_link";
+        pose_msg.pose.position.x = pose(0);
+        pose_msg.pose.position.y = pose(1);
+        pose_msg.pose.position.z = pose(2);
+        pose_msg.pose.orientation.x = pose(3);
+        pose_msg.pose.orientation.y = pose(4);
+        pose_msg.pose.orientation.z = pose(5);
+        pose_msg.pose.orientation.w = pose(6);
+        publisher_pose_->publish(pose_msg);
+        
+        // publish the computed jacobian
+        rrlib_interfaces::msg::JacobianStamped jacobian_msg;
+        jacobian_msg.header.stamp = this->now();
+        jacobian_msg.header.frame_id = "kuka_lwr_base_link";
+        std::vector<double> jacobian_data(jacobian.data(), jacobian.data() + jacobian.size());
+        jacobian_msg.jacobian.jacobian_data = jacobian_data;
+        publisher_jacobian_->publish(jacobian_msg);
     }
 }
 

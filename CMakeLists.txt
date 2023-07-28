@@ -10,12 +10,17 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(rrlib_interfaces REQUIRED)
 
 # headers are in the "include" directory
 include_directories(include)
 
 add_executable(lwr_forward_kinematics src/lwr_forward_kinematics_node.cpp)
-ament_target_dependencies(lwr_forward_kinematics rclcpp geometry_msgs sensor_msgs)
+ament_target_dependencies(lwr_forward_kinematics
+  rclcpp
+  geometry_msgs
+  sensor_msgs
+  rrlib_interfaces)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -30,7 +35,7 @@ if(BUILD_TESTING)
 endif()
 
 install(TARGETS
-	lwr_forward_kinematics
-	DESTINATION lib/${PROJECT_NAME})
+  lwr_forward_kinematics
+  DESTINATION lib/${PROJECT_NAME})
 
 ament_package()
