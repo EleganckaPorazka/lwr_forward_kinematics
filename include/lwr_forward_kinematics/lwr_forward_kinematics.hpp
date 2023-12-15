@@ -14,6 +14,7 @@ class LWRForwardKinematics
 public:
     LWRForwardKinematics();
     void SetTool( const Eigen::VectorXd &tool_pose );
+    Eigen::VectorXd GetTool();
     size_t GetDOF();
     Eigen::VectorXd ComputeToolPose( const Eigen::VectorXd &q );
     Eigen::MatrixXd ComputeJacobian( const Eigen::VectorXd &q );
@@ -23,8 +24,9 @@ private:
     // modified Denavit-Hartenberg parameters:
     Eigen::VectorXd a_;   // rotation angles around "x_{j - 1}" axis
     Eigen::VectorXd d_;   // translational displacements along "z_j" axis
-
-    Eigen::Matrix4d A_tool_;  // transformation matrix from the last link frame to the tool frame
+    
+    Eigen::VectorXd tool_pose_;     // tool pose (its frame position and orientation (in quaternions)) in the last link frame
+    Eigen::Matrix4d A_tool_;        // transformation matrix from the last link frame to the tool frame
 };
 
 LWRForwardKinematics::LWRForwardKinematics()
@@ -36,16 +38,24 @@ LWRForwardKinematics::LWRForwardKinematics()
     a_ << 0.0, M_PI/2, -M_PI/2, -M_PI/2, M_PI/2, M_PI/2, -M_PI/2;
     d_ << 0.3105, 0.0, 0.4, 0.0, 0.39, 0.0, 0.078;
     
+    tool_pose_.resize(7);
+    tool_pose_ << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0;
     A_tool_ = Eigen::Matrix4d::Identity();
 }
 
 void LWRForwardKinematics::SetTool( const Eigen::VectorXd &tool_pose )
 {
-    Eigen::Vector3d r_tool = tool_pose.head(3);
-    Eigen::Vector4d Q_tool = tool_pose.tail(4);
+    tool_pose_ = tool_pose;
+    Eigen::Vector3d r_tool = tool_pose_.head(3);
+    Eigen::Vector4d Q_tool = tool_pose_.tail(4);
     A_tool_.block<3, 3>(0, 0) = rrlib::QuaternionsToRotationMatrix( Q_tool );
     A_tool_.block<3, 1>(0, 3) = r_tool;
     A_tool_.row(3) << 0.0, 0.0, 0.0, 1.0;
+}
+
+Eigen::VectorXd LWRForwardKinematics::GetTool()
+{
+    return tool_pose_;
 }
 
 size_t LWRForwardKinematics::GetDOF()

@@ -9,6 +9,7 @@
 #include "rrlib_interfaces/msg/jacobian_stamped.hpp"
 
 #include "rclcpp/rclcpp.hpp"
+#include "rcl_interfaces/msg/set_parameters_result.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 
@@ -21,12 +22,12 @@ public:
     void SetTool(const rclcpp::Parameter & p);
     
 private:
+    rcl_interfaces::msg::SetParametersResult ParametersCallback(const std::vector<rclcpp::Parameter> &parameters);
+    OnSetParametersCallbackHandle::SharedPtr parameter_callback_handle_;
     void TopicCallback(const sensor_msgs::msg::JointState & msg);
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr subscription_;
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr publisher_pose_;
     rclcpp::Publisher<rrlib_interfaces::msg::JacobianStamped>::SharedPtr publisher_jacobian_;
-    std::shared_ptr<rclcpp::ParameterEventHandler> param_subscriber_;
-    std::shared_ptr<rclcpp::ParameterCallbackHandle> cb_handle_;
     
     LWRForwardKinematics forward_kinematics_;
 };
@@ -38,48 +39,73 @@ LWRForwardKinematicsNode::LWRForwardKinematicsNode()
     
     RCLCPP_INFO(this->get_logger(), "Starting the node.");
     
-    // tool pose in the last link's frame (initially set to coincide with the last link's frame)
-    std::vector<double> tool_value = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0};
-    this->declare_parameter("tool", tool_value);
-    
     // create a joint_states subscriber to get the joint positions
     subscription_ = this->create_subscription<sensor_msgs::msg::JointState>("joint_states", 10, std::bind(&LWRForwardKinematicsNode::TopicCallback, this, _1));
     // create a publisher for the tool pose
     publisher_pose_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("fwd_kin_pose", 10);
     // create a publisher for the Jacobian
     publisher_jacobian_ = this->create_publisher<rrlib_interfaces::msg::JacobianStamped>("fwd_kin_jacobian", 10);
-    // create a parameter subscriber 
-    param_subscriber_ = std::make_shared<rclcpp::ParameterEventHandler>(this);
+    // declare parameters and create the callback for handling their changes
+    // tool pose in the last link's frame (initially set to coincide with the last link's frame)
+    std::vector<double> tool_value = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0};
+    this->declare_parameter("tool", tool_value);
+    // create a parameter callback
+    parameter_callback_handle_ = this->add_on_set_parameters_callback(
+        std::bind(&LWRForwardKinematicsNode::ParametersCallback, this, _1));
     
-    // set a callback for this node's parameter "tool"
-    auto cb = [this](const rclcpp::Parameter & p) {
-        RCLCPP_INFO(
-          this->get_logger(), "Received an update to parameter \"%s\".", 
-          p.get_name().c_str()
-          );
-          SetTool(p);
-      };
-    cb_handle_ = param_subscriber_->add_parameter_callback("tool", cb);
+    // call explicitly the ParametersCallback to handle the parameter changes from the launcher
+    std::vector<std::string> param_names = {"tool"};
+    std::vector<rclcpp::Parameter> parameters = this->get_parameters(param_names);
+    rcl_interfaces::msg::SetParametersResult set_param_result = LWRForwardKinematicsNode::ParametersCallback(parameters);
 }
 
-void LWRForwardKinematicsNode::SetTool(const rclcpp::Parameter & p)
+rcl_interfaces::msg::SetParametersResult LWRForwardKinematicsNode::ParametersCallback(const std::vector<rclcpp::Parameter> &parameters)
 {
-    // get the tool pose in the last link's frame
-    if (p.as_double_array().size() != 7)
+    RCLCPP_INFO(this->get_logger(), "Received a parameter update.");
+    
+    rcl_interfaces::msg::SetParametersResult result;
+    result.successful = false;
+    result.reason = "";
+    
+    for (const auto &param : parameters)
     {
-        RCLCPP_WARN(this->get_logger(),
-            "The parameter \"%s\" requires 7 elements to describe its pose in the last link's frame. The tool change is not accepted.",
-            p.get_name().c_str()
-            );
+        if (param.get_name() == "tool")
+        {
+            if (param.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE_ARRAY)
+            {
+                if (param.as_double_array().size() == 7)
+                {
+                    Eigen::VectorXd tool_vector = Eigen::Map<const Eigen::VectorXd, Eigen::Unaligned>(param.as_double_array().data(), 7);
+                    if (tool_vector.tail(4).sum() < 1.00001 && tool_vector.tail(4).sum() > 0.99999) //TODO: obviously cannot compare with 1.0, but check whether the current approach is a good idea
+                    {
+                        forward_kinematics_.SetTool(tool_vector);
+                        result.successful = true;
+                        Eigen::VectorXd tool_pose = forward_kinematics_.GetTool();
+                        RCLCPP_INFO(this->get_logger(), "Parameter \"%s\" updated to value: [%lf, %lf, %lf, %lf, %lf, %lf, %lf].",
+                        param.get_name().c_str(), tool_pose(0), tool_pose(1), tool_pose(2), tool_pose(3), tool_pose(4), tool_pose(5), tool_pose(6));
+                    }
+                    else
+                    {
+                        RCLCPP_WARN(this->get_logger(),
+                            "The parameter \"%s\" shall have the last four elements -- the quaternions -- sum to 1, but now it sums to: %lf.",
+                            param.get_name().c_str(), tool_vector.tail(4).sum());
+                        result.successful = false;
+                        result.reason = "Quaternions shall sum to 1.";
+                    }
+                }
+                else
+                {
+                    RCLCPP_WARN(this->get_logger(),
+                        "The parameter \"%s\" requires 7 elements to describe its pose in the last link's frame, not %ld.",
+                        param.get_name().c_str(), param.as_double_array().size());
+                    result.successful = false;
+                    result.reason = "The tool pose requires 7 elements.";
+                }
+            }
+        }
     }
-    else
-    {
-        // if the tool pose is legit, then transform it into the Eigen vector
-        Eigen::VectorXd tool_vector = Eigen::Map<const Eigen::VectorXd, Eigen::Unaligned>(p.as_double_array().data(), 7);
-        // set the tool pose in the forward kinematics solver
-        forward_kinematics_.SetTool(tool_vector);
-        RCLCPP_INFO(this->get_logger(), "The tool change has been accepted.");
-    }
+    
+    return result;
 }
 
 void LWRForwardKinematicsNode::TopicCallback(const sensor_msgs::msg::JointState & msg)
